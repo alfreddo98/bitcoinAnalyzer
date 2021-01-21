@@ -157,11 +157,43 @@ function unconfirmedTransactions(){
 #En el curl lo que obtenemos es en la línea 6 la cantidad de dinero en dolares, en la línea 4 la cantidad de dinero en bitcoins y en la línea 2 el tiempo.
 		echo "${hash}/$(cat util.tmp | grep "$hash" -A 6 | tail -n 1)/$(cat util.tmp | grep "$hash" -A 4 | tail -n 1)/$(cat util.tmp | grep "$hash" -A 2 | tail -n 1)" >> util.table
 	done
+#Calculamos el total de euros gastados y lo metemos en un fichero llamado money:
 
+	cat util.table | tr '/' ' ' | awk '{print $2}' | grep -v "Cantidad" | tr -d '$' | sed 's/\..*//g' | tr -d ',' >> utilDinero
+
+#Calculamos en una variable llamada dinero, la suma de todo el dinero total gastado
+
+	money=0; cat utilDinero | while read dinero; do
+		let money+=$dinero
+		echo $money > utilMoney.tmp
+	done;
+#Representamos el número con puntos y con el dolar delante y lo metemos en un fichero que se usará para representar la tabla del dinero total:
+	echo -n "Cantidad total/" > utilAmount.table
+	echo "\$$(printf "%'.d\n" $(cat utilMoney.tmp))" >> utilAmount.table
+
+#Validamos si utilAmount.table tiene o no contenido:
+
+	if [ "$(cat util.table | wc -l)" != "1" ]; then
+#Pintamos la tabla en color verde.
+		echo -ne "${greenColour}"
 #Llamamos a printTable para sacarlo en formato tabla. El primer parámetro es para quitar el delimitador, en este caso / y el segundo parámetro lo que se quiere convertir en tabla.
-	printTable '/' "$(cat util.table)"
+		printTable '/' "$(cat util.table)"
+#Cerramos el color
+		echo -ne "${endColour}"
+#Representamos en azul la cantidad total que se está moviendo.
+		echo -ne "${blueColour}"
+		printTable '/' "$(cat utilAmount.table)"
+		echo -ne "${endColour}"
+#Hacemos un exit 0 y dejamos todo como estaba:
+		rm util.t* 2>/dev/null
+		tput cnorm;
+		exit 0
+	else
+		rm util* 2>/dev/null
+	fi
+
 #Borramos los archivos temporales que hemos creado:
-	rm util.t* 2>/dev/null
+	rm util* 2>/dev/null
 #Se devuelve el cursor.
 	tput cnorm
 }
