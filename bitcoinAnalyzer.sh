@@ -21,7 +21,7 @@ function ctrl_c(){
 # Para volver obtener el cursor (Se hará un tput civis para esconder el cursor
 	tput cnorm;
 # Quitamos todos los ficheros temporales que se crearon
-	rm util.t* 2>/dev/null
+	rm util* 2>/dev/null
 # Devolveremos un código de estado no exitoso.
 	exit 1
 }
@@ -29,8 +29,8 @@ function ctrl_c(){
 # Variables globales a utilizar
 
 unconfirmed_transactions="https://www.blockchain.com/es/btc/unconfirmed-transactions"
-inspection_transaction_url="https://www.blockchain.com/btc/tx/"
-inspection_address_url="https://www.blockchain.com/btc/address/"
+inspection_transaction_url="https://www.blockchain.com/es/btc/tx/"
+inspection_address_url="https://www.blockchain.com/es/btc/address/"
 
 # Funciones para representar la información en tablas, vamos a usar varias funciones para crear tablas sacadas del repositorio de github htbExplorer de s4vitar: https://github.com/s4vitar/htbExplorer/blob/master/htbExplorer. Estas funciones serán: printTable(), removeEmptyLines(), repeatString(), isEmptyString() y trimString(). Estas funciones van llamandose unas a otras para crear tablas perfectas.
 function printTable(){
@@ -102,7 +102,7 @@ function repeatString(){
         echo -e "${result// /${string}}"
     fi
 }
-
+:
 function isEmptyString(){
 
     local -r string="${1}"
@@ -125,12 +125,15 @@ function helpPanel(){
 	echo -e "\n${turquoiseColour}[!] Uso del programa: ${endColour}"
 # Creamos un bucle para dibujar guiones (estetico)
 	for i in $(seq 1 80); do echo -ne "${turquoiseColour}-"; done; echo -ne "${endColour}"
-	echo -e "\n\n\t${greyColour}[-e]${endColour}${yellowColour} Modo exploración ${endColour}"
+	echo -e "\n\n\t${grayColour}[-e]${endColour}${yellowColour} Modo exploración ${endColour}"
 	echo -e "\t\t${greenColour}unconfirmed_transactions${endColour}:${blueColour}:\t Listar transacciones que no se han confirmasdo${endColour}"
 	echo -e "\t\t${greenColour}inspect_transactions${endColour}:${blueColour}:\t\t Inspeccionar un hash de transacción${endColour}"
     echo -e "\t\t${greenColour}inspect_address${endColour}:${blueColour}:\t\t Inspeccionar una transacción de una dirección blockchaino${endColour}"
 	echo -e "\n\t${greyColour}[-n]${endColour}${yellowColour} Número de resultados a mostrar ${endColour}${blueColour} \n\t\t(Ejemplo para monstrar 10 últimas transacciones: -n 10) \n\t\t Si no se indica nada, el valor por defecto, será 100. ${endColour}\n"
-	echo -e "\n\t${greyColour}[-h]${endColour}${yellowColour} Mostrar el panel de ayuda ${endColour}\n"
+	echo -e "\n\t${grayColour}[-i]${endColour}${yellowColour} Proporcionar el identificador de transación ${endColour}${blueColour} \n\t\t(Ejemplo -i 45198fewd4dfe5d41s55fd31ds3df) ${endColour}"
+    echo -e "\n\t${grayColour}[-a]${endColour}${yellowColour} Proporcionar dirección de una Wallet a inspeccionar ${endColour}${blueColour} \n\t\t(Ejemplo -a asddds454215sd6ads4652) ${endColour}"
+	echo -e "\n\t${grayColour}[-h]${endColour}${yellowColour} Mostrar el panel de ayuda ${endColour}\n"
+
 #Salimos del programa devolviendo un código de error no exitoso y devolvemos el cursor.
 	tput cnorm;
 	exit 1
@@ -144,8 +147,8 @@ function unconfirmedTransactions(){
 # A traves de un búcle while, se hará todo el rato la petición y la escritura en el fichero hasta que en el fichero haya más de una línea que es lo que hay cuando se crea.
 	while [ "$(cat util.tmp | wc -l)" == "1" ]; do
 		curl -s "$unconfirmed_transactions" | html2text > util.tmp
-	done
 
+	done
 #Filtramos el fichero, para ello nos creamos una variable llamada hashes en la que metemos todos los hashes, pillamos solo los number_output primeros resultados.
 	hashes=$(cat util.tmp | grep "Hash" -A 1 | grep -v -E "Hash|\--|Tiempo" | head -n $number_output)
 #Lo bueno de meterlo en variables, es que se puede ir iterando para todos los hashes dentro de las variable.
@@ -162,12 +165,24 @@ function unconfirmedTransactions(){
 	cat util.table | tr '/' ' ' | awk '{print $2}' | grep -v "Cantidad" | tr -d '$' | sed 's/\..*//g' | tr -d ',' >> utilDinero
 
 #Calculamos en una variable llamada dinero, la suma de todo el dinero total gastado
-
 	money=0; cat utilDinero | while read dinero; do
 		let money+=$dinero
 		echo $money > utilMoney.tmp
 	done;
+
+	cat utilMoney.tmp 2>/dev/null
+
+    if [ "$(echo $?)" == "1" ]; then
+          echo -e "${redColour} \n No hay internet, conectese a Internet para conectar "
+          tput cnorm;
+          rm util* 2>/dev/null
+          exit 1
+    fi
+
+
+
 #Representamos el número con puntos y con el dolar delante y lo metemos en un fichero que se usará para representar la tabla del dinero total:
+
 	echo -n "Cantidad total/" > utilAmount.table
 	echo "\$$(printf "%'.d\n" $(cat utilMoney.tmp))" >> utilAmount.table
 
@@ -185,7 +200,7 @@ function unconfirmedTransactions(){
 		printTable '/' "$(cat utilAmount.table)"
 		echo -ne "${endColour}"
 #Hacemos un exit 0 y dejamos todo como estaba:
-		rm util.t* 2>/dev/null
+		rm util* 2>/dev/null
 		tput cnorm;
 		exit 0
 	else
@@ -198,15 +213,85 @@ function unconfirmedTransactions(){
 	tput cnorm
 }
 
+# Función que inspecciona una transacción dada, mostrará la entrada total de dinero, la salida total de dinero y las direcciones de entrada y de salida.
+function inspectTransaction(){
+	inspect_transaction_hash=$1
+# Se crea un fichero temporal en el que meteremos toda la información que tendrán las tablas, empezará con el título: Entrada Total y Salida Total.
+
+	echo "Entrada Total!Salida Total" > utilTotal.tmp
+
+# Se valida que en el fichero siempre se meta información
+	while [ "$(cat utilTotal.tmp | wc -l)" == "1" ]; do
+
+# Cojemos los valores en bitcoins con un curl como en la función anterior:
+
+		curl -s "${inspection_transaction_url}${inspect_transaction_hash}" | html2text | grep -E "Total entradas|Total de salida" -A 1 | grep -v -E "Total entradas|Total de salida"| xargs | tr ' ' '!' | sed 's/!BTC/ BTC/g' >> utilTotal.tmp
+
+	done
+# Representamos en tabla:
+	echo -ne "${greenColour}"
+	printTable '!' "$(cat utilTotal.tmp)"
+	echo -ne "${endColour}"
+	
+# Representamos ahora una tabla en la que se muestran las direcciones de entrada con las que se envia la transacción
+
+	echo "Dirección (Entradas)!Valor" > utilEntradas.tmp
+
+    while [ "$(cat utilEntradas.tmp | wc -l)" == "1" ]; do
+
+		curl -s  "${inspection_transaction_url}${inspect_transaction_hash}" | html2text | grep "Entradas" -A 500 | grep "Salidas" -B 500 | grep "Direcci" -A 3 | grep -v -E "Direcci|Valor|--" | awk 'NR%2{printf "%s ", $0;next;}1' | awk '{print $1 "!" $2 " " $3}' >> utilEntradas.tmp
+
+	done
+
+# Representamos la tabla:
+
+    echo -ne "${turquoiseColour}"
+    printTable '!' "$(cat utilEntradas.tmp)"
+    echo -ne "${endColour}"
+
+# Ahora hacemos lo mismo pero con las direcciones de salida
+
+    echo "Dirección (Entradas)!Valor" > utilSalidas.tmp
+
+    while [ "$(cat utilSalidas.tmp | wc -l)" == "1" ]; do
+
+        curl -s  "${inspection_transaction_url}${inspect_transaction_hash}" | html2text | grep "Salidas" -A 500 | grep "Direcci" -A 3 | grep -v -E "Direcci|Valor|--" | awk 'NR%2{printf "%s ", $0;next;}1' | awk '{print $1 "!" $2 " " $3}' >> utilSalidas.tmp
+
+    done
+
+# Representamos la tabla:
+     
+    echo -ne "${turquoiseColour}"
+    printTable '!' "$(cat utilSalidas.tmp)"
+    echo -ne "${endColour}"
+
+	rm util* 2>/dev/null
+	tput cnorm
+}
+# Creamos la función inspectAddress que inspeccionará una Wallet que se indique, se listará: transacciones realizadas, cantidad total recibida de dinero, cantidad total enviada de dinero y el saldo actual de la cuenta.
+
+function inspectAddress(){
+
+	wallet=$1
+	echo "Transacciones realizadas!Cantidad total recibida (BTC)!Cantidad total enviada (BTC)!Saldo Total de la cuenta" >> utilWallet.tmp
+
+	
+
+}
+
 # Creación de menu con getops, para ser user friendly: e será para exploración,
 # Variable para distinguir desde fuera cuando se tiene que ir a que sitio.
 parameter_counter=0;
-while getopts "e:n:h:" arg; do
+while getopts "e:n:h:i:a:" arg; do
 	case $arg in
 # Guarda el parámetro -e en la variable exploration_mode.
 		e) exploration_mode=$OPTARG; let parameter_counter+=1;; # Se suma 1 a parameter_counter.
 # Indicar el numero de transacciones a monstrar:
 		n) number_output=$OPTARG; let parameter_counter+=1;;
+# Llama al identificador de la transacción:
+		i) inspect_transaction=$OPTARG; let parameter_counter+=1;;
+# Llama al identificar de una Wallet:
+		a) inspect_address=$OPTARG; let parameter_counter+=1;;
 # Llama a al función de panel de ayuda si -h:
 		h) helpPanel;;
 	esac
@@ -229,5 +314,9 @@ else
 		else
 			unconfirmedTransactions $number_output
 		fi
+	elif [ "$(echo $exploration_mode)" == "inspect_transactions" ]; then 
+		inspectTransaction $inspect_transaction
+	elif [ "$(echo $exploration_mode)" == "inspect_address" ]; then
+		inspectAddress $inspect_address
 	fi
 fi
