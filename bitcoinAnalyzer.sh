@@ -26,11 +26,12 @@ function ctrl_c(){
 	exit 1
 }
 
-# Variables globales a utilizar
+# Variables globales a utilizar (Direcciones url)
 
 unconfirmed_transactions="https://www.blockchain.com/es/btc/unconfirmed-transactions"
 inspection_transaction_url="https://www.blockchain.com/es/btc/tx/"
 inspection_address_url="https://www.blockchain.com/es/btc/address/"
+bitcoin_value_url="https://cointelegraph.com/bitcoin-price-index"
 
 # Funciones para representar la información en tablas, vamos a usar varias funciones para crear tablas sacadas del repositorio de github htbExplorer de s4vitar: https://github.com/s4vitar/htbExplorer/blob/master/htbExplorer. Estas funciones serán: printTable(), removeEmptyLines(), repeatString(), isEmptyString() y trimString(). Estas funciones van llamandose unas a otras para crear tablas perfectas.
 function printTable(){
@@ -274,8 +275,43 @@ function inspectAddress(){
 
 	wallet=$1
 	echo "Transacciones realizadas!Cantidad total recibida (BTC)!Cantidad total enviada (BTC)!Saldo Total de la cuenta" >> utilWallet.tmp
-
 	
+	curl -s "${inspection_address_url}${wallet}" | html2text | grep -E "Transacciones|Total Recibidas|Cantidad total enviada|Saldo final" -A 1 | head -n -2 | grep -v -E "Transacciones|Total Recibidas|Cantidad total enviada|Saldo final" | xargs | tr ' ' '!' | sed 's/!BTC/ BTC/g' >> utilWallet.tmp
+
+# Representamos la tabla:
+
+    echo -ne "${turquoiseColour}"
+    printTable '!' "$(cat utilWallet.tmp)"
+    echo -ne "${endColour}"
+
+# Se elimina el fichero temporal
+
+	rm util* 2>/dev/null
+
+# Vamos a ir a la página cointelegraph que te da el valor del bitcoin a tiempo real en bitcoins, haremos al curl y grepearemos por Last Price que indica el último precio
+
+	bit_value=$(curl -s "${bitcoin_value_url}" | html2text | grep "Last Price" | head -n 1 | awk 'NF{print $NF}' | tr -d ',')
+
+# Ahora lo que vamos a representar es el valor en dolares haciendo la conversión con el valor a tiempo real en el programa. Para ello, se hará un curl de lo mismo, pero por separado, por un lado filtraremos solo por Transacciones y por otro por Total Recibida, Cantidad total enviada y Saldo final.
+
+	curl -s "${inspection_address_url}${wallet}" | html2text | grep "Transacciones" -A 1 | head -n -2 | grep -v -E "Transacciones|\--" > utilWallet.tmp
+	curl -s "${inspection_address_url}${wallet}" | html2text | grep -E "Total Recibidas|Cantidad total enviada|Saldo final" -A 1 | grep -v -E "Total Recibidas|Cantidad total enviada|Saldo final|\--" > utilBitcoinDollars.tmp
+
+# Nos recorremos todos los valores que se van a cambiar a dolares.
+
+	cat utilBitcoinDollars.tmp | while read value; do
+# El valor hacemos que este en formato decimal, además representamos el valor con el dolar delante:
+		echo "\$$(printf "%'.d\n" $(echo "$(echo $value | awk '{print $1}')*$bit_value" | bc) 2>/dev/null)" >> utilWallet.tmp
+	done
+
+# Si una tiene 0 Bitcoins, entonces la vamos a eliminar creando una variable llamada line_null, para eso filtramos por lo que empiece por $ y acabe por dolar (para indicar que acabe es con $ casualmente y cogemos la línea que va delante de los dos puntos (:).
+
+	line_null=$(cat utilWallet.tmp | grep "^\$$" | awk 'print $1' FS=":")
+
+# Si no hay una línea vacia entonces line_null estaría vacio.
+
+    rm util* 2>/dev/null
+    tput cnorm
 
 }
 
