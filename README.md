@@ -15,4 +15,5 @@ apt install bc -y
 html2text, permite leer de forma legible los resultados al hacer curl, mientras que bc sirve para bipear una operación realizada a nivel de sistema (Yo no la tenia instalada por defecto en Kali Linux)
 
 **Cómo ejecutar la aplicación**
+Existen tres modos de exploración: unconfirmed_transactions (muestra las últimas transacciones realizadas), inspect_transaction (Muestra la información relativa a una transacción que se especifique), inspect_address (Muestra la información relativa a una dirección que se especifique).
 
