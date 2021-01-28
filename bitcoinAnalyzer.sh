@@ -306,7 +306,24 @@ function inspectAddress(){
 
 # Si una tiene 0 Bitcoins, entonces la vamos a eliminar creando una variable llamada line_null, para eso filtramos por lo que empiece por $ y acabe por dolar (para indicar que acabe es con $ casualmente y cogemos la línea que va delante de los dos puntos (:).
 
-	line_null=$(cat utilWallet.tmp | grep "^\$$" | awk 'print $1' FS=":")
+	line_null=$(cat utilWallet.tmp | grep -n "^\$$" | awk '{print $1}' FS=":")
+
+# Si no devuelve nada, no habra ningún match y entonces 
+
+	if [ $line_null ]; then
+		sed "${line_nulls/\$0.00/}" -i utilWallet.tmp
+	fi
+# Lo ponemos todo en la misma línea y los espacios los convertimos en barra bajas:
+
+	cat utilWallet.tmp | xargs | tr ' ' '!' >> utilWallet2.tmp
+	rm utilWallet.tmp 2>/dev/null && mv utilWallet2.tmp utilWallet.tmp
+	sed '1iTransacciones realizadas!Cantidad total recibida (Dollares)!Cantidad total enviada (Dollares)!Saldo actual en la cuenta (Dollares)' -i utilWallet.tmp
+
+# Representamos la tabla:
+
+    echo -ne "${greenColour}"
+    printTable '!' "$(cat utilWallet.tmp)"
+    echo -ne "${endColour}"
 
 # Si no hay una línea vacia entonces line_null estaría vacio.
 
